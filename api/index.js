@@ -101,10 +101,12 @@ app.post('/api/register', async (req, res) => {
 
         res.status(201).json({ message: 'Registration successful!' });
     } catch (err) {
-        console.error('Registration Error:', err.message);
+        console.error('Registration Error:', err);
         res.status(500).json({
-            message: 'Registration failed.',
-            error: err.message
+            message: 'Registration failed at the database level.',
+            error: err.message,
+            code: err.code,
+            tip: 'If this is a timeout, ensure Aiven allows 0.0.0.0/0 in Network Access.'
         });
     }
 });
