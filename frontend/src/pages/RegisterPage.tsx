@@ -30,8 +30,9 @@ function RegisterPage() {
             setStatus({ message: response.data.message + ' Redirecting...', type: 'success' })
             setTimeout(() => navigate('/login'), 2000)
         } catch (err: any) {
+            const serverError = err.response?.data?.error || '';
             setStatus({
-                message: err.response?.data?.message || 'Server error during registration.',
+                message: `${err.response?.data?.message || 'Server error during registration.'} ${serverError}`,
                 type: 'error'
             })
         } finally {

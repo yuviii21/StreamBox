@@ -10,6 +10,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Log DB Host for debugging (without exposing password)
+console.log('API Initializing with DB_HOST:', process.env.DB_HOST);
+if (!process.env.DB_PASSWORD) {
+    console.error('CRITICAL: DB_PASSWORD is not set in environment variables!');
+}
+
 // Database Connection
 const pool = new Pool({
     host: process.env.DB_HOST,
