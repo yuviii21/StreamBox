@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { GradientButton } from '@/components/ui/gradient-button'
 import axios from 'axios'
 
-const API_URL = 'http://localhost:3000'
+const API_URL = '/api'
 
 function RegisterPage() {
     const [formData, setFormData] = useState({
