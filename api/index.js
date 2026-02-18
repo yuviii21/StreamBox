@@ -41,15 +41,37 @@ const initDb = async () => {
 
 // Routes
 
-app.post('/api/register', async (req, res) => {
-    await initDb(); // Ensure table exists
-    const { userId, username, password, email, phone } = req.body;
-
-    if (!userId || !username || !password || !email) {
-        return res.status(400).json({ message: 'Please provide all required fields.' });
-    }
-
+// Diagnostic endpoint to check DB connection
+app.get('/api/db-check', async (req, res) => {
     try {
+        const client = await pool.connect();
+        const result = await client.query('SELECT NOW()');
+        client.release();
+        res.status(200).json({
+            message: 'Database connection successful!',
+            time: result.rows[0].now,
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER
+        });
+    } catch (err) {
+        console.error('DB Check Error:', err.message);
+        res.status(500).json({
+            message: 'Database connection failed.',
+            error: err.message,
+            tip: 'Check your Vercel Environment Variables and Aiven IP allowlisting.'
+        });
+    }
+});
+
+app.post('/api/register', async (req, res) => {
+    try {
+        await initDb(); // Ensure table exists
+        const { userId, username, password, email, phone } = req.body;
+
+        if (!userId || !username || !password || !email) {
+            return res.status(400).json({ message: 'Please provide all required fields.' });
+        }
+
         const userExists = await pool.query('SELECT * FROM users WHERE id = $1 OR email = $2', [userId, email]);
         if (userExists.rows.length > 0) {
             return res.status(400).json({ message: 'User ID or Email already registered.' });
@@ -66,7 +88,10 @@ app.post('/api/register', async (req, res) => {
         res.status(201).json({ message: 'Registration successful!' });
     } catch (err) {
         console.error('Registration Error:', err.message);
-        res.status(500).json({ message: 'Server error during registration.' });
+        res.status(500).json({
+            message: 'Registration failed.',
+            error: err.message
+        });
     }
 });
 
