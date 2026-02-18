@@ -10,8 +10,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Log DB Host for debugging (without exposing password)
-console.log('API Initializing with DB_HOST:', process.env.DB_HOST);
+// Log DB Connection Config for debugging (Redacted)
+console.log('API Initializing with DB_HOST:', process.env.DB_HOST || 'MISSING');
+console.log('DB_USER:', process.env.DB_USER || 'MISSING');
+console.log('DB_NAME:', process.env.DB_NAME || 'MISSING');
+console.log('DB_PORT:', process.env.DB_PORT || 'MISSING');
+
 if (!process.env.DB_PASSWORD) {
     console.error('CRITICAL: DB_PASSWORD is not set in environment variables!');
 }
