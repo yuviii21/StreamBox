@@ -51,6 +51,10 @@ const initDb = async () => {
 
 // Routes
 
+app.get('/api', (req, res) => {
+    res.json({ message: 'Auth API is working!', status: 'Running as Vercel Serverless Function' });
+});
+
 // Diagnostic endpoint to check DB connection
 app.get('/api/db-check', async (req, res) => {
     try {
