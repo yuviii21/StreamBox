@@ -12,20 +12,32 @@ app.use(express.json());
 
 // Log DB Connection Config for debugging
 const getEnvStatus = () => ({
+    DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'MISSING',
     DB_HOST: process.env.DB_HOST ? 'SET' : 'MISSING',
     DB_USER: process.env.DB_USER ? 'SET' : 'MISSING',
-    DB_PASSWORD: process.env.DB_PASSWORD ? 'SET' : 'MISSING',
     DB_NAME: process.env.DB_NAME ? 'SET' : 'MISSING',
-    DB_PORT: process.env.DB_PORT ? 'SET' : 'MISSING',
 });
 
 // Database Connection Factory
 const getPool = () => {
+    // If DATABASE_URL is provided, use it directly (preferred)
+    if (process.env.DATABASE_URL) {
+        console.log('Using DATABASE_URL for connection');
+        return new Pool({
+            connectionString: process.env.DATABASE_URL.trim(),
+            ssl: {
+                rejectUnauthorized: false
+            }
+        });
+    }
+
+    // Fallback to individual components
     const status = getEnvStatus();
-    const missing = Object.entries(status).filter(([_, v]) => v === 'MISSING').map(([k]) => k);
+    const missing = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'DB_PORT']
+        .filter(k => !process.env[k]);
 
     if (missing.length > 0) {
-        throw new Error(`MISSING_ENV_VARS: ${missing.join(', ')}. Please add them exactly in Vercel Settings.`);
+        throw new Error(`MISSING_ENV_VARS: ${missing.join(', ')} (or DATABASE_URL). Please add them exactly in Vercel Settings.`);
     }
 
     // Force string and trim to avoid whitespace issues from copy-paste
