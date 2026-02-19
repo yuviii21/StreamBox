@@ -43,7 +43,7 @@ const initDb = async () => {
 // Routes
 
 app.get('/api', (req, res) => {
-    res.json({ message: 'Auth API is working!', dbType: 'PostgreSQL' });
+    res.json({ message: 'Auth API is working!', dbType: 'Aiven PostgreSQL' });
 });
 
 // Diagnostic endpoint to check DB connection
