@@ -14,6 +14,11 @@ app.use(cors());
 app.use(express.json());
 
 // Database Connection
+console.log("DB URL Check (Redacted):", process.env.DATABASE_URL ? "URL is set" : "URL is UNDEFINED");
+if (!process.env.DATABASE_URL) {
+    console.error("CRITICAL: DATABASE_URL is missing! Vercel environment variables are not loaded.");
+}
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
