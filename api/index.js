@@ -13,60 +13,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Log DB Connection Config for debugging
-const getEnvStatus = () => ({
-    DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'MISSING',
-    DB_HOST: process.env.DB_HOST ? 'SET' : 'MISSING',
-    DB_USER: process.env.DB_USER ? 'SET' : 'MISSING',
-    DB_NAME: process.env.DB_NAME ? 'SET' : 'MISSING',
+// Database Connection
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
-
-// Database Connection Factory
-const getPool = () => {
-    // If DATABASE_URL is provided, use it directly (preferred)
-    if (process.env.DATABASE_URL) {
-        console.log('Using DATABASE_URL for connection');
-        return new Pool({
-            connectionString: process.env.DATABASE_URL.trim(),
-            ssl: {
-                rejectUnauthorized: false
-            }
-        });
-    }
-
-    // Fallback to individual components
-    const status = getEnvStatus();
-    const missing = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'DB_PORT']
-        .filter(k => !process.env[k]);
-
-    if (missing.length > 0) {
-        throw new Error(`MISSING_ENV_VARS: ${missing.join(', ')} (or DATABASE_URL). Please add them exactly in Vercel Settings.`);
-    }
-
-    // Force string and trim to avoid whitespace issues from copy-paste
-    const user = String(process.env.DB_USER).trim();
-    const password = String(process.env.DB_PASSWORD).trim();
-    const host = String(process.env.DB_HOST).trim();
-    const port = String(process.env.DB_PORT).trim();
-    const database = String(process.env.DB_NAME).trim();
-
-    // Use Connection String format which is more robust
-    const connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`;
-
-    return new Pool({
-        connectionString,
-        ssl: {
-            rejectUnauthorized: false
-        }
-    });
-};
-
-let pool;
-try {
-    pool = getPool();
-} catch (e) {
-    console.error('Initial Pool Error:', e.message);
-}
 
 // Initialize Database Table (Helper function)
 const initDb = async () => {
@@ -94,31 +47,25 @@ app.get('/api', (req, res) => {
 // Diagnostic endpoint to check DB connection
 app.get('/api/db-check', async (req, res) => {
     try {
-        if (!pool) pool = getPool();
         const client = await pool.connect();
         const result = await client.query('SELECT NOW()');
         client.release();
         res.status(200).json({
             message: 'Database connection successful!',
-            time: result.rows[0].now,
-            host: process.env.DB_HOST,
-            user: process.env.DB_USER
+            time: result.rows[0].now
         });
     } catch (err) {
         console.error('DB Check Error:', err.message);
         res.status(500).json({
             message: 'Database connection failed.',
             error: err.message,
-            tip: err.message.includes('MISSING_ENV_VARS')
-                ? 'Please add the missing variables in Vercel Settings.'
-                : 'Check your Aiven IP allowlisting (0.0.0.0/0).'
+            tip: 'Check your database connection and Aiven IP allowlisting (0.0.0.0/0).'
         });
     }
 });
 
 app.post('/api/register', async (req, res) => {
     try {
-        if (!pool) pool = getPool();
         await initDb(); // Ensure table exists
         const { userId, username, password, email, phone } = req.body;
 
@@ -153,7 +100,6 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
     try {
-        if (!pool) pool = getPool();
         const { username, password } = req.body;
 
         if (!username || !password) {
@@ -181,9 +127,7 @@ app.post('/api/login', async (req, res) => {
         res.status(500).json({
             message: 'Server error during login.',
             error: err.message,
-            tip: err.message.includes('MISSING_ENV_VARS')
-                ? 'Please add the missing variables in Vercel Settings.'
-                : 'Check your database connection.'
+            tip: 'Check your database connection.'
         });
     }
 });
