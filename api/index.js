@@ -10,27 +10,42 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Log DB Connection Config for debugging (Redacted)
-console.log('API Initializing with DB_HOST:', process.env.DB_HOST || 'MISSING');
-console.log('DB_USER:', process.env.DB_USER || 'MISSING');
-console.log('DB_NAME:', process.env.DB_NAME || 'MISSING');
-console.log('DB_PORT:', process.env.DB_PORT || 'MISSING');
-
-if (!process.env.DB_PASSWORD) {
-    console.error('CRITICAL: DB_PASSWORD is not set in environment variables!');
-}
-
-// Database Connection
-const pool = new Pool({
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    ssl: {
-        rejectUnauthorized: false
-    }
+// Log DB Connection Config for debugging
+const getEnvStatus = () => ({
+    DB_HOST: process.env.DB_HOST ? 'SET' : 'MISSING',
+    DB_USER: process.env.DB_USER ? 'SET' : 'MISSING',
+    DB_PASSWORD: process.env.DB_PASSWORD ? 'SET' : 'MISSING',
+    DB_NAME: process.env.DB_NAME ? 'SET' : 'MISSING',
+    DB_PORT: process.env.DB_PORT ? 'SET' : 'MISSING',
 });
+
+// Database Connection Factory (to handle missing env vars gracefully)
+const getPool = () => {
+    const status = getEnvStatus();
+    const missing = Object.entries(status).filter(([_, v]) => v === 'MISSING').map(([k]) => k);
+
+    if (missing.length > 0) {
+        throw new Error(`MISSING_ENV_VARS: ${missing.join(', ')}. Please add them in Vercel Settings > Environment Variables.`);
+    }
+
+    return new Pool({
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        ssl: {
+            rejectUnauthorized: false
+        }
+    });
+};
+
+let pool;
+try {
+    pool = getPool();
+} catch (e) {
+    console.error(e.message);
+}
 
 // Initialize Database Table (Helper function)
 const initDb = async () => {
@@ -58,6 +73,7 @@ app.get('/api', (req, res) => {
 // Diagnostic endpoint to check DB connection
 app.get('/api/db-check', async (req, res) => {
     try {
+        if (!pool) pool = getPool();
         const client = await pool.connect();
         const result = await client.query('SELECT NOW()');
         client.release();
@@ -72,13 +88,16 @@ app.get('/api/db-check', async (req, res) => {
         res.status(500).json({
             message: 'Database connection failed.',
             error: err.message,
-            tip: 'Check your Vercel Environment Variables and Aiven IP allowlisting.'
+            tip: err.message.includes('MISSING_ENV_VARS')
+                ? 'Please add the missing variables in Vercel Settings.'
+                : 'Check your Aiven IP allowlisting (0.0.0.0/0).'
         });
     }
 });
 
 app.post('/api/register', async (req, res) => {
     try {
+        if (!pool) pool = getPool();
         await initDb(); // Ensure table exists
         const { userId, username, password, email, phone } = req.body;
 
@@ -112,13 +131,14 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-        return res.status(400).json({ message: 'Please provide both username and password.' });
-    }
-
     try {
+        if (!pool) pool = getPool();
+        const { username, password } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({ message: 'Please provide both username and password.' });
+        }
+
         const result = await pool.query('SELECT * FROM users WHERE id = $1', [username]);
         const user = result.rows[0];
 
@@ -137,7 +157,13 @@ app.post('/api/login', async (req, res) => {
         });
     } catch (err) {
         console.error('Login Error:', err.message);
-        res.status(500).json({ message: 'Server error during login.' });
+        res.status(500).json({
+            message: 'Server error during login.',
+            error: err.message,
+            tip: err.message.includes('MISSING_ENV_VARS')
+                ? 'Please add the missing variables in Vercel Settings.'
+                : 'Check your database connection.'
+        });
     }
 });
 
