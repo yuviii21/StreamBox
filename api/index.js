@@ -1,8 +1,10 @@
+// FORCE SSL BYPASS for Aiven/Supabase if needed (MUST BE FIRST LINE)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 const express = require('express');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
-const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -11,23 +13,28 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// SQLite Database Setup
-// NOTE: Vercel uses ephemeral storage. SQLite data will NOT persist after a redeploy on Vercel.
-const dbPath = process.env.DATABASE_PATH || '/tmp/database.sqlite';
-const db = new Database(dbPath);
+// Database Connection
+console.log("DATABASE_URL:", process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:([^:@]+)@/, ":****@") : "undefined");
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
 
 // Initialize Database Table
-const initDb = () => {
+const initDb = async () => {
     try {
-        db.prepare(`
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT NOT NULL,
-                password TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                phone TEXT
+                id VARCHAR(255) PRIMARY KEY,
+                username VARCHAR(255) NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                phone VARCHAR(50)
             );
-        `).run();
+        `);
     } catch (err) {
         console.error('Error initializing database:', err.message);
     }
@@ -36,17 +43,19 @@ const initDb = () => {
 // Routes
 
 app.get('/api', (req, res) => {
-    res.json({ message: 'Auth API is working!', dbType: 'SQLite' });
+    res.json({ message: 'Auth API is working!', dbType: 'PostgreSQL' });
 });
 
 // Diagnostic endpoint to check DB connection
-app.get('/api/db-check', (req, res) => {
+app.get('/api/db-check', async (req, res) => {
     try {
-        const row = db.prepare('SELECT date("now") as date').get();
+        const client = await pool.connect();
+        const result = await client.query('SELECT NOW()');
+        client.release();
         res.status(200).json({
             message: 'Database connection successful!',
-            date: row.date,
-            dbType: 'SQLite'
+            time: result.rows[0].now,
+            dbType: 'PostgreSQL'
         });
     } catch (err) {
         console.error('DB Check Error:', err.message);
@@ -59,26 +68,25 @@ app.get('/api/db-check', (req, res) => {
 
 app.post('/api/register', async (req, res) => {
     try {
-        initDb(); // Ensure table exists
+        await initDb();
         const { userId, username, password, email, phone } = req.body;
 
         if (!userId || !username || !password || !email) {
             return res.status(400).json({ message: 'Please provide all required fields.' });
         }
 
-        // Check if user already exists
-        const userExists = db.prepare('SELECT * FROM users WHERE id = ? OR email = ?').get(userId, email);
-        if (userExists) {
+        const userExists = await pool.query('SELECT * FROM users WHERE id = $1 OR email = $2', [userId, email]);
+        if (userExists.rows.length > 0) {
             return res.status(400).json({ message: 'User ID or Email already registered.' });
         }
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Store user
-        db.prepare(
-            'INSERT INTO users (id, username, password, email, phone) VALUES (?, ?, ?, ?, ?)'
-        ).run(userId, username, hashedPassword, email, phone);
+        await pool.query(
+            'INSERT INTO users (id, username, password, email, phone) VALUES ($1, $2, $3, $4, $5)',
+            [userId, username, hashedPassword, email, phone]
+        );
 
         res.status(201).json({ message: 'Registration successful!' });
     } catch (err) {
@@ -92,15 +100,15 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
     try {
-        initDb(); // Ensure table exists
+        await initDb();
         const { username, password } = req.body;
 
         if (!username || !password) {
             return res.status(400).json({ message: 'Please provide both username and password.' });
         }
 
-        // Fetch user from DB
-        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(username);
+        const result = await pool.query('SELECT * FROM users WHERE id = $1', [username]);
+        const user = result.rows[0];
 
         if (!user) {
             return res.status(400).json({ message: 'Invalid credentials.' });

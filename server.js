@@ -1,5 +1,5 @@
 const express = require('express');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const path = require('path');
@@ -15,23 +15,29 @@ app.use(express.json());
 // Serve static files from the React frontend build
 app.use(express.static(path.join(__dirname, 'frontend/dist')));
 
-// SQLite Database Setup
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'database.sqlite');
-const db = new Database(dbPath);
+// Database Connection (Supabase/PostgreSQL)
+console.log("DB URL Check (Redacted):", process.env.DATABASE_URL ? "URL is set" : "URL is UNDEFINED");
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false // Supabase works better with this for local/cloud flexibility
+    }
+});
 
 // Initialize Database Table
-const initDb = () => {
+const initDb = async () => {
     try {
-        db.prepare(`
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT NOT NULL,
-                password TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                phone TEXT
+                id VARCHAR(255) PRIMARY KEY,
+                username VARCHAR(255) NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                phone VARCHAR(50)
             );
-        `).run();
-        console.log('Database initialized successfully (SQLite).');
+        `);
+        console.log('Database initialized successfully (Supabase/PostgreSQL).');
     } catch (err) {
         console.error('Error initializing database:', err.message);
     }
@@ -42,17 +48,19 @@ initDb();
 // API Routes
 
 app.get('/api/health', (req, res) => {
-    res.json({ message: 'Server is healthy!', dbType: 'SQLite' });
+    res.json({ message: 'Server is healthy!', dbType: 'PostgreSQL (Supabase)' });
 });
 
 // Diagnostic endpoint to check DB connection
-app.get('/api/db-check', (req, res) => {
+app.get('/api/db-check', async (req, res) => {
     try {
-        const row = db.prepare('SELECT date("now") as date').get();
+        const client = await pool.connect();
+        const result = await client.query('SELECT NOW()');
+        client.release();
         res.status(200).json({
             message: 'Database connection successful!',
-            date: row.date,
-            dbType: 'SQLite'
+            time: result.rows[0].now,
+            dbType: 'PostgreSQL (Supabase)'
         });
     } catch (err) {
         console.error('DB Check Error:', err.message);
@@ -71,19 +79,18 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ message: 'Please provide all required fields.' });
         }
 
-        // Check if user already exists
-        const userExists = db.prepare('SELECT * FROM users WHERE id = ? OR email = ?').get(userId, email);
-        if (userExists) {
+        const userExists = await pool.query('SELECT * FROM users WHERE id = $1 OR email = $2', [userId, email]);
+        if (userExists.rows.length > 0) {
             return res.status(400).json({ message: 'User ID or Email already registered.' });
         }
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Store user
-        db.prepare(
-            'INSERT INTO users (id, username, password, email, phone) VALUES (?, ?, ?, ?, ?)'
-        ).run(userId, username, hashedPassword, email, phone);
+        await pool.query(
+            'INSERT INTO users (id, username, password, email, phone) VALUES ($1, $2, $3, $4, $5)',
+            [userId, username, hashedPassword, email, phone]
+        );
 
         res.status(201).json({ message: 'Registration successful!' });
     } catch (err) {
@@ -103,8 +110,8 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ message: 'Please provide both username and password.' });
         }
 
-        // Fetch user from DB
-        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(username);
+        const result = await pool.query('SELECT * FROM users WHERE id = $1', [username]);
+        const user = result.rows[0];
 
         if (!user) {
             return res.status(400).json({ message: 'Invalid credentials.' });
