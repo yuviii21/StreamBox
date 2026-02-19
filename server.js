@@ -135,8 +135,15 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// Middleware to log requests (helpful for debugging)
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
+
 // Handle React routing, return all requests to React app
-app.get('*', (req, res) => {
+// Using middleware as a catch-all to avoid Express 5 wildcard issues
+app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'frontend/dist', 'index.html'));
 });
 
