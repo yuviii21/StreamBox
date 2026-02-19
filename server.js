@@ -15,13 +15,13 @@ app.use(express.json());
 // Serve static files from the React frontend build
 app.use(express.static(path.join(__dirname, 'frontend/dist')));
 
-// Database Connection (Supabase/PostgreSQL)
+// Database Connection (Aiven PostgreSQL)
 console.log("DB URL Check (Redacted):", process.env.DATABASE_URL ? "URL is set" : "URL is UNDEFINED");
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false // Supabase works better with this for local/cloud flexibility
+        rejectUnauthorized: false // Required for Aiven self-signed certificates
     }
 });
 
@@ -37,7 +37,7 @@ const initDb = async () => {
                 phone VARCHAR(50)
             );
         `);
-        console.log('Database initialized successfully (Supabase/PostgreSQL).');
+        console.log('Database initialized successfully (Aiven PostgreSQL).');
     } catch (err) {
         console.error('Error initializing database:', err.message);
     }
@@ -48,7 +48,7 @@ initDb();
 // API Routes
 
 app.get('/api/health', (req, res) => {
-    res.json({ message: 'Server is healthy!', dbType: 'PostgreSQL (Supabase)' });
+    res.json({ message: 'Server is healthy!', dbType: 'Aiven PostgreSQL' });
 });
 
 // Diagnostic endpoint to check DB connection
@@ -60,7 +60,7 @@ app.get('/api/db-check', async (req, res) => {
         res.status(200).json({
             message: 'Database connection successful!',
             time: result.rows[0].now,
-            dbType: 'PostgreSQL (Supabase)'
+            dbType: 'Aiven PostgreSQL'
         });
     } catch (err) {
         console.error('DB Check Error:', err.message);
