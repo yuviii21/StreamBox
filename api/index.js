@@ -1,12 +1,11 @@
+// FORCE SSL BYPASS for Aiven self-signed certificates (MUST BE FIRST LINE)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 require('dotenv').config();
-
-// FORCE SSL BYPASS for Aiven self-signed certificates
-// This is the most robust way to solve "self-signed certificate in certificate chain" on Vercel
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 const app = express();
 
