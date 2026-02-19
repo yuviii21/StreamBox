@@ -19,21 +19,27 @@ const getEnvStatus = () => ({
     DB_PORT: process.env.DB_PORT ? 'SET' : 'MISSING',
 });
 
-// Database Connection Factory (to handle missing env vars gracefully)
+// Database Connection Factory
 const getPool = () => {
     const status = getEnvStatus();
     const missing = Object.entries(status).filter(([_, v]) => v === 'MISSING').map(([k]) => k);
 
     if (missing.length > 0) {
-        throw new Error(`MISSING_ENV_VARS: ${missing.join(', ')}. Please add them in Vercel Settings > Environment Variables.`);
+        throw new Error(`MISSING_ENV_VARS: ${missing.join(', ')}. Please add them exactly in Vercel Settings.`);
     }
 
+    // Force string and trim to avoid whitespace issues from copy-paste
+    const user = String(process.env.DB_USER).trim();
+    const password = String(process.env.DB_PASSWORD).trim();
+    const host = String(process.env.DB_HOST).trim();
+    const port = String(process.env.DB_PORT).trim();
+    const database = String(process.env.DB_NAME).trim();
+
+    // Use Connection String format which is more robust
+    const connectionString = `postgres://${user}:${password}@${host}:${port}/${database}`;
+
     return new Pool({
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
+        connectionString,
         ssl: {
             rejectUnauthorized: false
         }
@@ -44,7 +50,7 @@ let pool;
 try {
     pool = getPool();
 } catch (e) {
-    console.error(e.message);
+    console.error('Initial Pool Error:', e.message);
 }
 
 // Initialize Database Table (Helper function)
