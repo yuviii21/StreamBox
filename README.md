@@ -21,7 +21,7 @@ Install backend dependencies and start the API:
 npm install
 node server.js
 ```
-*API running at http://localhost:3000*
+
 
 ### 2. Frontend Directory
 Open a new terminal, navigate to the `/frontend` folder, and start the development server:
@@ -30,7 +30,6 @@ cd frontend
 npm install
 npm run dev
 ```
-*App running at http://localhost:5173*
 
 ## How it Works
 1.  **Register**: Navigate to `http://localhost:5173/register`. Fill in your details. The `GradientButton` will handle the submission.
@@ -43,3 +42,5 @@ npm run dev
     - `src/components/ui/`: Reusable UI components including `GradientButton`.
     - `src/pages/`: Authentication pages (Login/Register).
     - `src/globals.css`: Global styles and animation logic.
+
+[Live Demo](https://stream-eight-snowy.vercel.app)
